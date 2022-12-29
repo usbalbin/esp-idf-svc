@@ -2,6 +2,7 @@ use core::{marker::PhantomData, ptr};
 
 extern crate alloc;
 use alloc::vec;
+use esp_idf_hal::cpu::Core;
 
 use std::io;
 
@@ -180,11 +181,30 @@ impl<'r> RequestDelegate for IdfRequest<'r> {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, PartialOrd, Debug)]
+pub enum TaskAffinity {
+    Core0, // PRO on dual-core systems, the one and only CPU on single-core systems
+    #[cfg(any(esp32, esp32s3))]
+    Core1, // APP on dual-core systems
+    Any,
+}
+
+impl TaskAffinity {
+    fn to_core_id(self) -> i32 {
+        match self {
+            TaskAffinity::Core0 => 0,
+            TaskAffinity::Core1 => 1,
+            TaskAffinity::Any => std::i32::MAX,
+        }
+    }
+}
+
 #[derive(Copy, Clone, Debug)]
 pub struct Configuration {
     pub http_port: u16,
     pub https_port: u16,
     pub max_uri_handlers: u16,
+    pub task_affinity: TaskAffinity,
 }
 
 impl Default for Configuration {
@@ -193,6 +213,7 @@ impl Default for Configuration {
             http_port: 80,
             https_port: 443,
             max_uri_handlers: 8,
+            task_affinity: TaskAffinity::Any,
         }
     }
 }
@@ -239,7 +260,7 @@ pub struct Server {
 impl Server {
     fn new(conf: &Configuration) -> Result<Self> {
         let config =
-            Self::default_configuration(conf.http_port, conf.https_port, conf.max_uri_handlers);
+            Self::default_configuration(conf.http_port, conf.https_port, conf.max_uri_handlers, conf.task_affinity.to_core_id());
 
         let mut handle: esp_idf_sys::httpd_handle_t = ptr::null_mut();
         let handle_ref = &mut handle;
@@ -397,11 +418,12 @@ impl Server {
         http_port: u16,
         https_port: u16,
         max_uri_handlers: u16,
+        core_id: i32,
     ) -> esp_idf_sys::httpd_config_t {
         esp_idf_sys::httpd_config_t {
             task_priority: 5,
             stack_size: if https_port != 0 { 10240 } else { 4096 },
-            core_id: std::i32::MAX,
+            core_id,
             server_port: http_port,
             ctrl_port: 32768,
             max_open_sockets: if https_port != 0 { 4 } else { 7 },

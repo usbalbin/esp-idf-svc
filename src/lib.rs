@@ -46,7 +46,7 @@ pub mod log;
     feature = "alloc",
     esp_idf_comp_mqtt_enabled,
     esp_idf_comp_esp_event_enabled,
-    esp_idf_version_major = "4"
+    esp_idf_version_major = "4" // TODO: Make this work with 5.0
 ))]
 pub mod mqtt;
 #[cfg(esp_idf_lwip_ipv4_napt)]

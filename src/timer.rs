@@ -124,15 +124,29 @@ impl EspTimerServiceType for Task {
     }
 }
 
-pub struct EspTimerService<T>(T)
+pub struct EspTimerService<T>
 where
-    T: EspTimerServiceType;
+    T: EspTimerServiceType,
+{
+    service_type: T,
+    skip_unhandled_events: bool,
+}
+
+impl<T> EspTimerService<T>
+where T: EspTimerServiceType {
+    pub fn set_skip_unhandled_events(&mut self, do_skip: bool) {
+        self.skip_unhandled_events = do_skip;
+    }
+}
 
 pub type EspTaskTimerService = EspTimerService<Task>;
 
 impl EspTimerService<Task> {
     pub fn new() -> Result<Self, EspError> {
-        Ok(Self(Task))
+        Ok(Self {
+            service_type: Task,
+            skip_unhandled_events: false,
+        })
     }
 }
 
@@ -141,7 +155,10 @@ where
     T: EspTimerServiceType + Clone,
 {
     fn clone(&self) -> Self {
-        Self(self.0.clone())
+        Self{
+            service_type: self.service_type.clone(),
+            skip_unhandled_events: self.skip_unhandled_events
+        }
     }
 }
 
@@ -183,7 +200,7 @@ where
                     name: b"rust\0" as *const _ as *const _, // TODO
                     arg: unsafe_callback.as_ptr(),
                     dispatch_method,
-                    skip_unhandled_events: false, // TODO
+                    skip_unhandled_events: self.skip_unhandled_events,
                 },
                 &mut handle as *mut _,
             )
@@ -222,7 +239,10 @@ mod isr {
 
     impl super::EspTimerService<ISR> {
         pub unsafe fn new() -> Result<Self, EspError> {
-            Ok(Self(ISR))
+            Ok(Self {
+                service_type: ISR,
+                skip_unhandled_events: false,
+            })
         }
 
         pub(crate) unsafe fn isr_yield() {
